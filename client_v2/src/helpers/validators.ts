@@ -1,4 +1,6 @@
 import intl from 'panel/common/intl';
+import type { RewriteEntry } from 'panel/api/model/rewriteEntry';
+import { sameRewriteRegion } from 'panel/helpers/smartDns';
 import {
     MAX_PORT,
     R_HOST,
@@ -328,10 +330,7 @@ export const validateClientsPerLine = (value: string): string | undefined =>
     validatePerLine(
         value,
         (line) =>
-            R_IPV4.test(line) ||
-            isValidIpv6(line) ||
-            isValidCidr(line) ||
-            R_CLIENT_ID.test(line),
+            R_IPV4.test(line) || isValidIpv6(line) || isValidCidr(line) || R_CLIENT_ID.test(line),
     );
 
 /**
@@ -444,8 +443,9 @@ const normalizeRewriteValue = (value?: string): string => (value ?? '').trim().t
 export const validateRewriteNotExists = (
     domain: string,
     answer: string,
-    existingList: Array<{ domain?: string; answer?: string }>,
-    currentRewrite?: { domain?: string; answer?: string },
+    existingList: RewriteEntry[],
+    currentRewrite?: RewriteEntry,
+    proposedRewrite: RewriteEntry = {},
 ): ValidationResult => {
     if (!domain || !answer) {
         return undefined;
@@ -457,7 +457,8 @@ export const validateRewriteNotExists = (
     const isDuplicate = existingList.some((item) => {
         if (
             normalizeRewriteValue(item.domain) !== normalizedDomain ||
-            normalizeRewriteValue(item.answer) !== normalizedAnswer
+            normalizeRewriteValue(item.answer) !== normalizedAnswer ||
+            !sameRewriteRegion(item, proposedRewrite)
         ) {
             return false;
         }
@@ -465,7 +466,8 @@ export const validateRewriteNotExists = (
         const isCurrentRewrite =
             currentRewrite !== undefined &&
             normalizeRewriteValue(item.domain) === normalizeRewriteValue(currentRewrite.domain) &&
-            normalizeRewriteValue(item.answer) === normalizeRewriteValue(currentRewrite.answer);
+            normalizeRewriteValue(item.answer) === normalizeRewriteValue(currentRewrite.answer) &&
+            sameRewriteRegion(item, currentRewrite);
 
         return !isCurrentRewrite;
     });

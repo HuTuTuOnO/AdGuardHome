@@ -142,6 +142,9 @@ type Config struct {
 	// Rewrites is a list of legacy DNS rewrite records.
 	Rewrites []*LegacyRewrite `yaml:"rewrites"`
 
+	// SmartDNS controls client-region routing for DNS rewrites.
+	SmartDNS SmartDNSConfig `yaml:"smart_dns"`
+
 	// Filters are the blocking filter lists.
 	Filters []FilterYAML `yaml:"-"`
 
@@ -253,6 +256,9 @@ type Checker interface {
 
 // DNSFilter matches hostnames and DNS requests against filtering rules.
 type DNSFilter struct {
+	// regionLookup is protected by confMu, including its lifetime.
+	regionLookup regionLookup
+
 	// logger is used for logging the filtering process.
 	logger *slog.Logger
 
@@ -402,6 +408,13 @@ func (d *DNSFilter) Close() {
 	}
 
 	d.reset(context.TODO())
+
+	d.confMu.Lock()
+	defer d.confMu.Unlock()
+	if d.regionLookup != nil {
+		d.regionLookup.Close()
+		d.regionLookup = nil
+	}
 }
 
 func (d *DNSFilter) reset(ctx context.Context) {
@@ -518,7 +531,7 @@ func (d *DNSFilter) CheckHost(
 	host = strings.ToLower(host)
 
 	if setts.FilteringEnabled {
-		res = d.processRewrites(host, qtype)
+		res = d.processClientRewrites(host, qtype, setts.ClientIP)
 		if res.Reason == Rewritten {
 			return res, nil
 		}
@@ -557,14 +570,26 @@ func (d *DNSFilter) processRewrites(host string, qtype uint16) (res Result) {
 		return Result{}
 	}
 
-	rewrites, matched := findRewrites(d.conf.Rewrites, host, qtype)
+	return d.processRewriteEntries(ctx, d.conf.Rewrites, host, qtype)
+}
+
+func (d *DNSFilter) processRewriteEntries(
+	ctx context.Context,
+	entries []*LegacyRewrite,
+	host string,
+	qtype uint16,
+) (res Result) {
+	rewrites, matched := findRewrites(entries, host, qtype)
 	if !matched {
 		return Result{}
 	}
 
 	res.Reason = Rewritten
 
-	return d.handleRewriteLoop(ctx, host, qtype, rewrites, matched, &res)
+	find := func(name string) ([]*LegacyRewrite, bool) {
+		return findRewrites(entries, name, qtype)
+	}
+	return d.handleRewriteLoop(ctx, host, qtype, rewrites, matched, &res, find)
 }
 
 // handleRewriteLoop performs filtering rewrite processing based on the legacy
@@ -576,6 +601,7 @@ func (d *DNSFilter) handleRewriteLoop(
 	rewrites []*LegacyRewrite,
 	matched bool,
 	res *Result,
+	find func(string) ([]*LegacyRewrite, bool),
 ) (resResult Result) {
 	cnames := container.NewMapSet[string]()
 	origHost := host
@@ -611,7 +637,7 @@ func (d *DNSFilter) handleRewriteLoop(
 
 		cnames.Add(host)
 		res.CanonName = host
-		rewrites, matched = findRewrites(d.conf.Rewrites, host, qtype)
+		rewrites, matched = find(host)
 	}
 
 	d.setRewriteResult(ctx, res, host, rewrites, qtype)
@@ -1023,10 +1049,18 @@ func New(c *Config, blockFilters []Filter) (d *DNSFilter, err error) {
 		return nil, fmt.Errorf("rewrites: preparing: %w", err)
 	}
 
+	if d.conf.SmartDNS.Enabled {
+		d.regionLookup, err = d.newRegionLookup()
+		if err != nil {
+			return nil, fmt.Errorf("smart dns: %w", err)
+		}
+	}
+
 	if d.conf.BlockedServices != nil {
 		d.conf.BlockedServices.FilterUnknownIDs(ctx, d.logger)
 		err = d.conf.BlockedServices.Validate()
 		if err != nil {
+			d.Close()
 			return nil, fmt.Errorf("initializing blocked services: %w", err)
 		}
 	}

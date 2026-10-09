@@ -22,6 +22,14 @@ import (
 //
 // NOTE:  Keep fields in sync with [cloneRewrites].
 type LegacyRewrite struct {
+	RewriteRegion `yaml:",inline"`
+
+	// Priority breaks ties after region specificity; larger values win.
+	Priority int32 `yaml:"priority,omitempty"`
+
+	// Weight controls selection within a tied candidate set. Zero defaults to one.
+	Weight uint32 `yaml:"weight,omitempty"`
+
 	// Domain is the pattern to which this rewrite applies.
 	Domain string `yaml:"domain"`
 
@@ -42,7 +50,7 @@ type LegacyRewrite struct {
 
 // equal returns true if the rw is equal to the other.
 func (rw *LegacyRewrite) equal(other *LegacyRewrite) (ok bool) {
-	return rw.Domain == other.Domain && rw.Answer == other.Answer
+	return rw.Domain == other.Domain && rw.Answer == other.Answer && rw.RewriteRegion == other.RewriteRegion
 }
 
 // matchesQType returns true if the entry matches the question type qt.
@@ -75,6 +83,7 @@ func (rw *LegacyRewrite) normalize(ctx context.Context, l *slog.Logger) (err err
 	// use it in matchDomainWildcard instead of using strings.ToLower
 	// everywhere.
 	rw.Domain = strings.ToLower(rw.Domain)
+	rw.RewriteRegion = rw.RewriteRegion.normalized()
 
 	switch rw.Answer {
 	case "AAAA":
@@ -245,11 +254,14 @@ func cloneRewrites(entries []*LegacyRewrite) (clone []*LegacyRewrite) {
 	clone = make([]*LegacyRewrite, len(entries))
 	for i, rw := range entries {
 		clone[i] = &LegacyRewrite{
-			Domain:  rw.Domain,
-			Answer:  rw.Answer,
-			IP:      rw.IP,
-			Type:    rw.Type,
-			Enabled: rw.Enabled,
+			RewriteRegion: rw.RewriteRegion,
+			Priority:      rw.Priority,
+			Weight:        rw.Weight,
+			Domain:        rw.Domain,
+			Answer:        rw.Answer,
+			IP:            rw.IP,
+			Type:          rw.Type,
+			Enabled:       rw.Enabled,
 		}
 	}
 

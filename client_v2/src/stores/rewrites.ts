@@ -25,6 +25,7 @@ type RewritesState = {
     currentRewrite: RewriteEntry;
     list: (RewriteEntry & { enabled?: boolean })[];
     enabled: boolean;
+    smart_dns: RewriteSettings['smart_dns'];
 };
 
 const initialState: RewritesState = {
@@ -39,6 +40,7 @@ const initialState: RewritesState = {
     currentRewrite: {},
     list: [],
     enabled: true,
+    smart_dns: { enabled: false },
 };
 
 const [state, setState] = createStore<RewritesState>(initialState);
@@ -134,7 +136,11 @@ export const getRewriteSettings = async () => {
     setState('processingSettings', true);
     try {
         const data = await rewriteSettingsGet();
-        setState({ enabled: data.enabled ?? true, processingSettings: false });
+        setState({
+            enabled: data.enabled ?? true,
+            smart_dns: data.smart_dns ?? { enabled: false },
+            processingSettings: false,
+        });
     } catch (error) {
         addErrorToast({ error });
         setState('processingSettings', false);
@@ -143,11 +149,13 @@ export const getRewriteSettings = async () => {
 
 /** Finds the rewrite rule that produced the given query log entry. */
 export const findRewriteRuleByDomain = (domain: string): RewriteEntry | undefined => {
-    const exact = state.list.find((r) => r.domain === domain);
-    if (exact) return exact;
-    const wildcard = state.list.find((r) => r.domain === `*.${domain}`);
-    if (wildcard) return wildcard;
-    return state.list.find((r) => r.domain?.startsWith('*.') && domain.endsWith(r.domain.slice(1)));
+    const exact = state.list.filter((r) => r.domain === domain);
+    if (exact.length > 0) return exact.length === 1 ? exact[0] : undefined;
+    const wildcards = state.list.filter(
+        (r) => r.domain?.startsWith('*.') && domain.endsWith(r.domain.slice(1)),
+    );
+    // A query log has no selected rule identity: avoid editing a different node.
+    return wildcards.length === 1 ? wildcards[0] : undefined;
 };
 
 export const updateRewriteSettings = async (values: RewriteSettings) => {

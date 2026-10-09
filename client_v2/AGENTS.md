@@ -90,6 +90,7 @@ client_v2/
 │   │   ├── Routes/Paths.ts        # Route path constants
 │   │   └── Stats/                 # Dashboard "Show more" detail pages (top clients, domains, upstreams)
 │   ├── helpers/                   # Pure utilities, validators, theme helpers
+│   │   └── smartDns.ts            # Rewrite region identity and routing validation
 │   ├── hooks/                     # Shared SolidJS hooks
 │   ├── lib/                       # Theme aggregation, misc utils
 │   ├── store/types.ts             # Legacy type re-exports (post-Redux)
@@ -108,6 +109,7 @@ client_v2/
 ├── tsconfig.json                  # Path aliases: panel/* → src/*, Twosky → ../.twosky.json
 ├── vitest.config.ts               # jsdom + vite-plugin-solid
 ├── playwright.config.ts           # e2e config (base URL :3000)
+├── playwright.smartdns.config.ts   # Smart DNS checks against an isolated backend
 ├── postcss.config.js              # postcss-import + nested + autoprefixer
 ├── package.json                   # Scripts + dependencies
 └── constants.js                   # BUILD_ENVS, BASE_URL = 'control'
@@ -373,6 +375,10 @@ must not depend on stores or components. Helpers are pure and dependency-free.
 - **Stores**: Module-scoped `createStore` singletons exported directly — no
   Context/Provider. Async actions set a `processing*` flag, call generated
   API functions, then `setState`. Errors are reported via `addErrorToast`.
+- **Rewrite identity**: Preserve all regional fields when editing, toggling,
+  or deleting a DNS rewrite. Domain and answer alone do not identify a regional
+  rule. Query log actions must not choose an arbitrary rule when several
+  regional rules match the domain.
 - **Naming**: Files `PascalCase.tsx` for components, `camelCase.ts` for
   stores/helpers. CSS module files `*.module.pcss`.
 - **Error handling**: API errors throw from `customFetch.ts`; store actions

@@ -24,7 +24,7 @@ vi.mock('panel/common/intl', async () =>
     (await import('panel/__tests__/helpers/copy')).createIntlMock(),
 );
 
-import { getRewritesList, rewritesState } from 'panel/stores/rewrites';
+import { getRewritesList, rewritesState, findRewriteRuleByDomain } from 'panel/stores/rewrites';
 
 describe('getRewritesList — initialized flag', () => {
     beforeEach(() => {
@@ -47,5 +47,14 @@ describe('getRewritesList — initialized flag', () => {
 
         expect(rewritesState.initialized).toBe(true);
         expect(mocks.addErrorToast).toHaveBeenCalled();
+    });
+
+    it('does not choose an arbitrary regional rule for query log actions', async () => {
+        mocks.rewriteList.mockResolvedValue([
+            { domain: 'example.org', answer: '192.0.2.1', province: '北京' },
+            { domain: 'example.org', answer: '192.0.2.2', province: '广东' },
+        ]);
+        await getRewritesList();
+        expect(findRewriteRuleByDomain('example.org')).toBeUndefined();
     });
 });

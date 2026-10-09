@@ -1,4 +1,7 @@
-import { createSignal, createEffect, untrack } from 'solid-js';
+import { createSignal, createEffect, createUniqueId, untrack } from 'solid-js';
+import cn from 'clsx';
+import type { RewriteEntry } from 'panel/api/model/rewriteEntry';
+import { normalizeRewriteRouting, validRewriteRouting } from 'panel/helpers/smartDns';
 
 import intl from 'panel/common/intl';
 import { Dialog } from 'panel/common/ui/Dialog/Dialog';
@@ -19,8 +22,9 @@ import {
 } from 'panel/helpers/validators';
 import { DomainFaqTooltip } from './DomainFaqTooltip';
 import { AnswerFaqTooltip } from './AnswerFaqTooltip';
+import s from './ConfigureRewritesModal.module.pcss';
 
-export type FormValues = {
+export type FormValues = RewriteEntry & {
     answer: string;
     domain: string;
     enabled: boolean;
@@ -54,17 +58,46 @@ const getButtonText = (modalId: ConfigureRewritesModalIdType) => {
 export const ConfigureRewritesModal = (props: Props) => {
     const [domain, setDomain] = createSignal(untrack(() => props.rewriteToEdit?.domain) ?? '');
     const [answer, setAnswer] = createSignal(untrack(() => props.rewriteToEdit?.answer) ?? '');
+    const prefix = createUniqueId();
+    const [country, setCountry] = createSignal('');
+    const [province, setProvince] = createSignal('');
+    const [city, setCity] = createSignal('');
+    const [district, setDistrict] = createSignal('');
+    const [isp, setIsp] = createSignal('');
+    const [priority, setPriority] = createSignal('0');
+    const [weight, setWeight] = createSignal('1');
+    const routing = (): RewriteEntry =>
+        normalizeRewriteRouting({
+            country: country(),
+            province: province(),
+            city: city(),
+            district: district(),
+            isp: isp(),
+            priority: Number(priority()),
+            weight: Number(weight()),
+        });
+    const resetRouting = (rewrite?: RewriteEntry) => {
+        setCountry(rewrite?.country ?? '');
+        setProvince(rewrite?.province ?? '');
+        setCity(rewrite?.city ?? '');
+        setDistrict(rewrite?.district ?? '');
+        setIsp(rewrite?.isp ?? '');
+        setPriority(String(rewrite?.priority ?? 0));
+        setWeight(String(rewrite?.weight ?? 1));
+    };
     const [domainError, setDomainError] = createSignal<string | undefined>();
     const [answerError, setAnswerError] = createSignal<string | undefined>();
 
     createEffect(() => {
         setDomain(props.rewriteToEdit?.domain ?? '');
         setAnswer(props.rewriteToEdit?.answer ?? '');
+        resetRouting(props.rewriteToEdit);
     });
 
     const closeDialog = () => {
         setDomain('');
         setAnswer('');
+        resetRouting();
         setDomainError(undefined);
         setAnswerError(undefined);
         props.onClose?.();
@@ -72,6 +105,7 @@ export const ConfigureRewritesModal = (props: Props) => {
     };
 
     const handleCancel = () => {
+        resetRouting(props.rewriteToEdit);
         setDomain(props.rewriteToEdit?.domain ?? '');
         setAnswer(props.rewriteToEdit?.answer ?? '');
         setDomainError(undefined);
@@ -91,23 +125,31 @@ export const ConfigureRewritesModal = (props: Props) => {
             validateRequiredValue(answer()) ||
             validateAnswer(answer()) ||
             validateRewriteNotSame(domain(), answer()) ||
-            validateRewriteNotExists(domain(), answer(), rewritesState.list, props.rewriteToEdit);
+            validateRewriteNotExists(
+                domain(),
+                answer(),
+                rewritesState.list,
+                props.rewriteToEdit,
+                routing(),
+            );
         setAnswerError(err || undefined);
         return !err;
     };
 
-    const hasErrors = () => !!domainError() || !!answerError();
+    const hasErrors = () =>
+        !!domainError() || !!answerError() || !validRewriteRouting(priority(), weight());
 
     const handleFormSubmit = async (e: Event) => {
         e.preventDefault();
 
         const domainValid = validateDomainField();
         const answerValid = validateAnswerField();
-        if (!domainValid || !answerValid) {
+        if (!domainValid || !answerValid || !validRewriteRouting(priority(), weight())) {
             return;
         }
 
         const values: FormValues = {
+            ...routing(),
             domain: domain(),
             answer: answer(),
             enabled: props.rewriteToEdit?.enabled ?? false,
@@ -125,18 +167,14 @@ export const ConfigureRewritesModal = (props: Props) => {
 
         switch (props.modalId) {
             case MODAL_TYPE.ADD_REWRITE: {
-                addRewrite({ answer: values.answer, domain: values.domain, enabled: true });
+                addRewrite({ ...values, enabled: true });
                 closeDialog();
                 break;
             }
             case MODAL_TYPE.EDIT_REWRITE: {
                 updateRewrite({
                     target: props.rewriteToEdit,
-                    update: {
-                        answer: values.answer,
-                        domain: values.domain,
-                        enabled: values.enabled,
-                    },
+                    update: values,
                 });
                 closeDialog();
                 break;
@@ -149,19 +187,14 @@ export const ConfigureRewritesModal = (props: Props) => {
 
     return (
         <ModalWrapper id={props.modalId}>
-            <Dialog
-                visible
-                onClose={handleCancel}
-                title={getTitle(props.modalId)}
-                noOverflowContent
-            >
+            <Dialog visible onClose={handleCancel} title={getTitle(props.modalId)}>
                 <form onSubmit={handleFormSubmit}>
                     <div>
                         <div class={theme.form.group}>
                             <div class={theme.form.input}>
                                 <Input
                                     type="text"
-                                    id="domain"
+                                    id={prefix + '-domain'}
                                     data-testid="rewrite-domain-input"
                                     label={
                                         <>
@@ -189,7 +222,7 @@ export const ConfigureRewritesModal = (props: Props) => {
                             <div class={theme.form.input}>
                                 <Input
                                     type="text"
-                                    id="answer"
+                                    id={prefix + '-answer'}
                                     data-testid="rewrite-answer-input"
                                     label={
                                         <>
@@ -212,6 +245,87 @@ export const ConfigureRewritesModal = (props: Props) => {
                                 />
                             </div>
                         </div>
+                    </div>
+
+                    <div class={cn(theme.form.group, s.routingFields)}>
+                        <p class={theme.text.t3}>{intl.getMessage('smart_dns_routing_help')}</p>
+                        <Input
+                            id={prefix + '-country'}
+                            data-testid="rewrite-country-input"
+                            label={intl.getMessage('smart_dns_country')}
+                            value={country()}
+                            onChange={(e) => {
+                                setCountry(e.target.value);
+                                setAnswerError(undefined);
+                            }}
+                            onCard
+                        />
+                        <Input
+                            id={prefix + '-province'}
+                            data-testid="rewrite-province-input"
+                            label={intl.getMessage('smart_dns_province')}
+                            value={province()}
+                            onChange={(e) => {
+                                setProvince(e.target.value);
+                                setAnswerError(undefined);
+                            }}
+                            onCard
+                        />
+                        <Input
+                            id={prefix + '-city'}
+                            data-testid="rewrite-city-input"
+                            label={intl.getMessage('smart_dns_city')}
+                            value={city()}
+                            onChange={(e) => {
+                                setCity(e.target.value);
+                                setAnswerError(undefined);
+                            }}
+                            onCard
+                        />
+                        <Input
+                            id={prefix + '-district'}
+                            data-testid="rewrite-district-input"
+                            label={intl.getMessage('smart_dns_district')}
+                            value={district()}
+                            onChange={(e) => {
+                                setDistrict(e.target.value);
+                                setAnswerError(undefined);
+                            }}
+                            onCard
+                        />
+                        <Input
+                            id={prefix + '-isp'}
+                            data-testid="rewrite-isp-input"
+                            label={intl.getMessage('smart_dns_isp')}
+                            value={isp()}
+                            onChange={(e) => {
+                                setIsp(e.target.value);
+                                setAnswerError(undefined);
+                            }}
+                            onCard
+                        />
+                        <Input
+                            id={prefix + '-priority'}
+                            type="text"
+                            inputMode="numeric"
+                            data-testid="rewrite-priority-input"
+                            label={intl.getMessage('smart_dns_priority')}
+                            value={priority()}
+                            onChange={(e) => setPriority(e.target.value)}
+                            onCard
+                        />
+                        <Input
+                            id={prefix + '-weight'}
+                            type="number"
+                            min={1}
+                            max={4294967295}
+                            step={1}
+                            data-testid="rewrite-weight-input"
+                            label={intl.getMessage('smart_dns_weight')}
+                            value={weight()}
+                            onChange={(e) => setWeight(e.target.value)}
+                            onCard
+                        />
                     </div>
 
                     <div class={theme.dialog.footer}>

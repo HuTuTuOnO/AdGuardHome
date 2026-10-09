@@ -113,6 +113,23 @@ export const DNSRewrites = () => {
                 />
 
                 <div class={cn(s.group, s.buttonGroup)}>
+                    <SettingRow
+                        variant="switch"
+                        id="rewrite_smart_dns_enabled"
+                        title={intl.getMessage('smart_dns_title')}
+                        description={intl.getMessage('smart_dns_description')}
+                        checked={rewritesState.smart_dns?.enabled ?? false}
+                        disabled={rewritesState.processingSettings}
+                        onChange={(enabled) =>
+                            updateRewriteSettings({
+                                enabled: rewritesState.enabled,
+                                smart_dns: { ...rewritesState.smart_dns, enabled },
+                            })
+                        }
+                    />
+                </div>
+
+                <div class={cn(s.group, s.buttonGroup)}>
                     <PlusButton onClick={openAddRewiresModal} testId="add-rewrite">
                         {intl.getMessage('rewrite_add')}
                     </PlusButton>

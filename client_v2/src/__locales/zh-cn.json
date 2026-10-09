@@ -932,5 +932,17 @@
   "yes_disable": "禁用",
   "yes_disallow": "是，禁止",
   "yes_remove": "是，移除",
-  "yes_reset": "重置"
+  "yes_reset": "重置",
+  "smart_dns_title": "智能 DNS",
+  "smart_dns_description": "根据客户端的地域和运营商选择重写答案。地域与优先级相同的规则按权重随机选择。",
+  "smart_dns_routing_help": "地域留空表示任意值，已填写的字段必须全部命中。先比较命中字段数量，再按国家、省、市、区县、运营商的顺序比较是否填写，最后比较优先级（数值越大越优先）。相同候选按权重返回一个答案。",
+  "smart_dns_country": "国家",
+  "smart_dns_province": "省份",
+  "smart_dns_city": "城市",
+  "smart_dns_district": "区县",
+  "smart_dns_isp": "运营商",
+  "smart_dns_priority": "优先级",
+  "smart_dns_weight": "权重",
+  "smart_dns_region": "客户端地域",
+  "smart_dns_any_region": "任意地域"
 }

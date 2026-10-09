@@ -13,9 +13,12 @@ import (
 //
 // TODO(d.kolyshev): Use [rewrite.Item] instead.
 type rewriteEntryJSON struct {
-	Domain  string          `json:"domain"`
-	Answer  string          `json:"answer"`
-	Enabled aghalg.NullBool `json:"enabled"`
+	RewriteRegion
+	Priority int32           `json:"priority,omitempty"`
+	Weight   *uint32         `json:"weight,omitempty"`
+	Domain   string          `json:"domain"`
+	Answer   string          `json:"answer"`
+	Enabled  aghalg.NullBool `json:"enabled"`
 }
 
 // rewriteSettings contains DNS rewrite settings.
@@ -24,7 +27,8 @@ type rewriteSettings struct {
 	//
 	// TODO(s.chzhen):  Consider using [aghalg.NullBool] so "{}" won't
 	// accidentally disable rewrites on decode.
-	Enabled bool `json:"enabled"`
+	Enabled  bool            `json:"enabled"`
+	SmartDNS *SmartDNSConfig `json:"smart_dns,omitempty"`
 }
 
 // handleRewriteList is the handler for the GET /control/rewrite/list HTTP API.
@@ -36,10 +40,18 @@ func (d *DNSFilter) handleRewriteList(w http.ResponseWriter, r *http.Request) {
 		defer d.confMu.RUnlock()
 
 		for _, ent := range d.conf.Rewrites {
+			var weight *uint32
+			if ent.Weight != 0 {
+				value := ent.Weight
+				weight = &value
+			}
 			jsonEnt := rewriteEntryJSON{
-				Domain:  ent.Domain,
-				Answer:  ent.Answer,
-				Enabled: aghalg.BoolToNullBool(ent.Enabled),
+				RewriteRegion: ent.RewriteRegion,
+				Priority:      ent.Priority,
+				Weight:        weight,
+				Domain:        ent.Domain,
+				Answer:        ent.Answer,
+				Enabled:       aghalg.BoolToNullBool(ent.Enabled),
 			}
 			arr = append(arr, &jsonEnt)
 		}
@@ -67,9 +79,18 @@ func (d *DNSFilter) handleRewriteAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rw := &LegacyRewrite{
-		Domain:  rwJSON.Domain,
-		Answer:  rwJSON.Answer,
-		Enabled: enabled,
+		RewriteRegion: rwJSON.RewriteRegion,
+		Priority:      rwJSON.Priority,
+		Domain:        rwJSON.Domain,
+		Answer:        rwJSON.Answer,
+		Enabled:       enabled,
+	}
+	if rwJSON.Weight != nil {
+		if *rwJSON.Weight == 0 {
+			aghhttp.ErrorAndLog(ctx, l, r, w, http.StatusBadRequest, "weight must be greater than zero")
+			return
+		}
+		rw.Weight = *rwJSON.Weight
 	}
 
 	err = rw.normalize(ctx, l)
@@ -111,8 +132,9 @@ func (d *DNSFilter) handleRewriteDelete(w http.ResponseWriter, r *http.Request) 
 	}
 
 	entDel := &LegacyRewrite{
-		Domain: jsent.Domain,
-		Answer: jsent.Answer,
+		RewriteRegion: jsent.RewriteRegion.normalized(),
+		Domain:        jsent.Domain,
+		Answer:        jsent.Answer,
 	}
 	arr := []*LegacyRewrite{}
 
@@ -160,13 +182,23 @@ func (d *DNSFilter) handleRewriteUpdate(w http.ResponseWriter, r *http.Request) 
 	}
 
 	rwDel := &LegacyRewrite{
-		Domain: updateJSON.Target.Domain,
-		Answer: updateJSON.Target.Answer,
+		RewriteRegion: updateJSON.Target.RewriteRegion.normalized(),
+		Domain:        updateJSON.Target.Domain,
+		Answer:        updateJSON.Target.Answer,
 	}
 
 	rwAdd := &LegacyRewrite{
-		Domain: updateJSON.Update.Domain,
-		Answer: updateJSON.Update.Answer,
+		RewriteRegion: updateJSON.Update.RewriteRegion,
+		Priority:      updateJSON.Update.Priority,
+		Domain:        updateJSON.Update.Domain,
+		Answer:        updateJSON.Update.Answer,
+	}
+	if updateJSON.Update.Weight != nil {
+		if *updateJSON.Update.Weight == 0 {
+			aghhttp.ErrorAndLog(ctx, l, r, w, http.StatusBadRequest, "weight must be greater than zero")
+			return
+		}
+		rwAdd.Weight = *updateJSON.Update.Weight
 	}
 
 	err = rwAdd.normalize(ctx, l)
@@ -194,6 +226,9 @@ func (d *DNSFilter) handleRewriteUpdate(w http.ResponseWriter, r *http.Request) 
 	}
 
 	rwDel.Enabled = d.conf.Rewrites[index].Enabled
+	if updateJSON.Update.Weight == nil {
+		rwAdd.Weight = d.conf.Rewrites[index].Weight
+	}
 	if updateJSON.Update.Enabled == aghalg.NBNull {
 		rwAdd.Enabled = rwDel.Enabled
 	} else {
@@ -221,9 +256,13 @@ func (d *DNSFilter) handleRewriteUpdate(w http.ResponseWriter, r *http.Request) 
 // handleRewriteSettings is the handler for the GET /control/rewrite/settings
 // HTTP API.
 func (d *DNSFilter) handleRewriteSettings(w http.ResponseWriter, r *http.Request) {
+	d.confMu.RLock()
+	conf := d.conf.SmartDNS
 	resp := &rewriteSettings{
-		Enabled: protectedBool(d.confMu, &d.conf.RewritesEnabled),
+		Enabled:  d.conf.RewritesEnabled,
+		SmartDNS: &conf,
 	}
+	d.confMu.RUnlock()
 
 	aghhttp.WriteJSONResponseOK(r.Context(), d.logger, w, r, resp)
 }
@@ -241,6 +280,25 @@ func (d *DNSFilter) handleRewriteSettingsUpdate(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	setProtectedBool(d.confMu, &d.conf.RewritesEnabled, req.Enabled)
+	if req.SmartDNS != nil {
+		var lookup regionLookup
+		if req.SmartDNS.Enabled {
+			lookup, err = newRegionLookup(*req.SmartDNS, d.conf.DataDir)
+			if err != nil {
+				aghhttp.ErrorAndLog(ctx, d.logger, r, w, http.StatusBadRequest, "smart dns: %s", err)
+				return
+			}
+		}
+		d.confMu.Lock()
+		if d.regionLookup != nil {
+			d.regionLookup.Close()
+		}
+		d.regionLookup = lookup
+		d.conf.SmartDNS = *req.SmartDNS
+		d.conf.RewritesEnabled = req.Enabled
+		d.confMu.Unlock()
+	} else {
+		setProtectedBool(d.confMu, &d.conf.RewritesEnabled, req.Enabled)
+	}
 	d.conf.ConfModifier.Apply(ctx)
 }

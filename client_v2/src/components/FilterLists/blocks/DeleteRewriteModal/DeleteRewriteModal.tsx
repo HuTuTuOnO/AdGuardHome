@@ -1,4 +1,5 @@
 import { Show } from 'solid-js';
+import type { RewriteEntry } from 'panel/api/model/rewriteEntry';
 
 import intl from 'panel/common/intl';
 import { ConfirmDialog } from 'panel/common/ui/ConfirmDialog';
@@ -8,11 +9,7 @@ import { closeModal } from 'panel/stores/modals';
 import { deleteRewrite, rewritesState } from 'panel/stores/rewrites';
 
 type Props = {
-    rewriteToDelete: {
-        answer?: string;
-        domain?: string;
-        enabled?: boolean;
-    };
+    rewriteToDelete: RewriteEntry;
     setRewriteToDelete: (value: { answer: string; domain: string; enabled: boolean }) => void;
     onConfirm?: () => boolean | void | Promise<boolean | void>;
     onClose?: () => void;

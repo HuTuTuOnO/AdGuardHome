@@ -1,4 +1,4 @@
-import { createSignal, createMemo } from 'solid-js';
+import { createSignal, createMemo, createUniqueId } from 'solid-js';
 import cn from 'clsx';
 
 import intl from 'panel/common/intl';
@@ -74,7 +74,7 @@ export const RewritesTable = (props: Props) => {
             sortable: true,
             render: (value: string, row: Rewrite) => {
                 const { domain, enabled } = row;
-                const id = `rewrite_${domain}`;
+                const id = createUniqueId();
 
                 return (
                     <div class={theme.table.cell}>
@@ -109,6 +109,29 @@ export const RewritesTable = (props: Props) => {
             ),
         },
         {
+            key: 'region',
+            header: { text: intl.getMessage('smart_dns_region'), className: s.headerCell },
+            render: (_value, row) => (
+                <div class={theme.table.cell}>
+                    <div class={theme.table.cellValueText}>
+                        {[row.country, row.province, row.city, row.district, row.isp]
+                            .filter(Boolean)
+                            .join(' / ') || intl.getMessage('smart_dns_any_region')}
+                    </div>
+                </div>
+            ),
+        },
+        {
+            key: 'priority',
+            header: { text: intl.getMessage('smart_dns_priority'), className: s.headerCell },
+            render: (_value, row) => <div class={theme.table.cell}>{row.priority ?? 0}</div>,
+        },
+        {
+            key: 'weight',
+            header: { text: intl.getMessage('smart_dns_weight'), className: s.headerCell },
+            render: (_value, row) => <div class={theme.table.cell}>{row.weight ?? 1}</div>,
+        },
+        {
             key: 'actions',
             header: {
                 text: '',
@@ -117,11 +140,7 @@ export const RewritesTable = (props: Props) => {
             sortable: false,
             width: 80,
             render: (value: any, row: Rewrite) => {
-                const currentRewrite = {
-                    answer: row.answer,
-                    domain: row.domain,
-                    enabled: row.enabled,
-                };
+                const currentRewrite = { ...row };
 
                 return (
                     <div class={theme.table.cell}>

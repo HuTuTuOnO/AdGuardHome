@@ -26,6 +26,7 @@ require (
 	// it, unless all custom templates will be migrated to the new format,
 	// see https://github.com/kardianos/service/issues/418.
 	github.com/kardianos/service v1.2.4
+	github.com/lionsoul2014/ip2region/binding/golang v0.0.0-20260901011515-c1a1fc7d5941
 	github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
 	github.com/mdlayher/netlink v1.11.2
 	github.com/mdlayher/packet v1.1.2
@@ -76,6 +77,7 @@ require (
 	github.com/jstemmer/go-junit-report/v2 v2.1.0 // indirect
 	github.com/kisielk/errcheck v1.20.0 // indirect
 	github.com/mdlayher/socket v0.7.0 // indirect
+	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/openai/openai-go/v3 v3.68.0 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect

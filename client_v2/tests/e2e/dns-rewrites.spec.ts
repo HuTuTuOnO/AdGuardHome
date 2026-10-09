@@ -120,8 +120,8 @@ test.describe('DNS Rewrites', () => {
         await expect(addButton).toBeVisible();
         await addButton.click();
 
-        const domainInput = page.locator('input#domain');
-        const answerInput = page.locator('input#answer');
+        const domainInput = page.getByTestId('rewrite-domain-input');
+        const answerInput = page.getByTestId('rewrite-answer-input');
 
         await expect(domainInput).toBeVisible({ timeout: 10000 });
         await expect(answerInput).toBeVisible();
@@ -156,9 +156,11 @@ test.describe('DNS Rewrites', () => {
         await addRewriteViaApi(page, TOGGLE_REWRITE);
         await openDnsRewritesPage(page);
 
-        const toggleId = `rewrite_${TOGGLE_REWRITE.domain}`;
-        const individualToggleInput = page.locator(`input[id="${toggleId}"]`);
-        const individualToggleLabel = page.locator(`label[for="${toggleId}"]`);
+        const individualToggleLabel = page
+            .getByText(TOGGLE_REWRITE.domain, { exact: true })
+            .locator('..')
+            .locator('label');
+        const individualToggleInput = individualToggleLabel.locator('input');
 
         await expect(individualToggleInput).toBeAttached();
         await expect(individualToggleLabel).toBeVisible();
@@ -186,8 +188,8 @@ test.describe('DNS Rewrites', () => {
         await expect(editButton).toBeVisible({ timeout: 10_000 });
         await editButton.click();
 
-        const domainInput = page.locator('input#domain');
-        const answerInput = page.locator('input#answer');
+        const domainInput = page.getByTestId('rewrite-domain-input');
+        const answerInput = page.getByTestId('rewrite-answer-input');
 
         await expect(domainInput).toBeVisible({ timeout: 10000 });
         await expect(answerInput).toBeVisible();

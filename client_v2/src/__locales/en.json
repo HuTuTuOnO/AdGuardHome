@@ -932,5 +932,17 @@
   "yes_disable": "Yes, disable",
   "yes_disallow": "Yes, disallow",
   "yes_remove": "Yes, remove",
-  "yes_reset": "Yes, reset"
+  "yes_reset": "Yes, reset",
+  "smart_dns_title": "Smart DNS",
+  "smart_dns_description": "Choose a rewrite answer using the client’s location and ISP. Equally ranked rules use weighted random selection.",
+  "smart_dns_routing_help": "Leave location fields empty to match any client. All filled fields must match. More filled fields win, then country, province, city, district and ISP, then higher priority. Equal candidates return one answer by weight.",
+  "smart_dns_country": "Country",
+  "smart_dns_province": "Province",
+  "smart_dns_city": "City",
+  "smart_dns_district": "District",
+  "smart_dns_isp": "ISP",
+  "smart_dns_priority": "Priority",
+  "smart_dns_weight": "Weight",
+  "smart_dns_region": "Client region",
+  "smart_dns_any_region": "Any region"
 }

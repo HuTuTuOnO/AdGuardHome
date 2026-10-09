@@ -103,6 +103,7 @@ export * from './serverStatus';
 export * from './serviceGroup';
 export * from './setProtectionRequest';
 export * from './setRulesRequest';
+export * from './smartDNSConfig';
 export * from './stats';
 export * from './statsConfig';
 export * from './statsConfigInterval';

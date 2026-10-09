@@ -3138,6 +3138,32 @@
             preserves previous value.
           'example': true
           'default': true
+        'country':
+          'type': 'string'
+          'description': 'Client country; empty matches any value'
+        'province':
+          'type': 'string'
+          'description': 'Client province; empty matches any value'
+        'city':
+          'type': 'string'
+          'description': 'Client city; empty matches any value'
+        'district':
+          'type': 'string'
+          'description': 'Client district; empty matches any value'
+        'isp':
+          'type': 'string'
+          'description': 'Client ISP; empty matches any value'
+        'priority':
+          'type': 'integer'
+          'format': 'int32'
+          'default': 0
+          'description': 'Higher values win after region specificity'
+        'weight':
+          'type': 'integer'
+          'minimum': 1
+          'maximum': 4294967295
+          'default': 1
+          'description': 'Relative probability within equal region and priority candidates'
     'RewriteSettings':
       'type': 'object'
       'description': 'DNS rewrite settings'
@@ -3148,6 +3174,20 @@
           'type': 'boolean'
           'description': 'indicates whether rewrites are applied'
           'example': true
+        'smart_dns':
+          '$ref': '#/components/schemas/SmartDNSConfig'
+    'SmartDNSConfig':
+      'type': 'object'
+      'properties':
+        'enabled':
+          'type': 'boolean'
+          'default': false
+        'ipv4_db':
+          'type': 'string'
+          'description': 'IPv4 XDB path, relative to data directory or absolute; defaults to ip2region_v4.xdb'
+        'ipv6_db':
+          'type': 'string'
+          'description': 'IPv6 XDB path, relative to data directory or absolute; defaults to ip2region_v6.xdb'
     'BlockedServicesArray':
       'type': 'array'
       'items':

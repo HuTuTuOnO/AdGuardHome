@@ -427,8 +427,8 @@ func TestDNSFilter_HandleRewriteSettings(t *testing.T) {
 	)
 
 	var (
-		wantEnabled  = fmt.Sprintf("{%q:%s}", enabled, "true")
-		wantDisabled = fmt.Sprintf("{%q:%s}", enabled, "false")
+		wantEnabled  = fmt.Sprintf(`{%q:true,"smart_dns":{"enabled":false}}`, enabled)
+		wantDisabled = fmt.Sprintf(`{%q:false,"smart_dns":{"enabled":false}}`, enabled)
 	)
 
 	confUpdated := false

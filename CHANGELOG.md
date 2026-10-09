@@ -22,6 +22,12 @@ NOTE: Add new changes BELOW THIS COMMENT.
 
 - Go version has been updated to prevent the possibility of exploiting the Go vulnerabilities fixed in [1.27.1][go-1.27.1].
 
+### Added
+
+- Optional smart DNS rewrites using local ip2region IPv4 and IPv6 databases,
+  regional conditions, priority, and weighted answer selection. See
+  [Smart DNS rewrites](doc/smart-dns.md).
+
 ### Fixed
 
 - Reading partially received TCP prefix.
