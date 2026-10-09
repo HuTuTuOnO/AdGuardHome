@@ -172,12 +172,12 @@ parse_opts() {
 set_channel() {
 	# Validate.
 	case "$channel" in
-	'development' | 'edge' | 'beta' | 'release')
+	'smart-dns')
 		# All is well, go on.
 		;;
 	*)
 		error_exit "invalid channel '$channel'
-supported values are 'development', 'edge', 'beta', and 'release'"
+supported value is 'smart-dns'"
 		;;
 	esac
 
@@ -318,9 +318,9 @@ fix_freebsd() {
 download_curl() {
 	curl_output="${2:-}"
 	if [ "$curl_output" = '' ]; then
-		curl -L -S -s "$1"
+	curl -f -L -S -s "$1"
 	else
-		curl -L -S -o "$curl_output" -s "$1"
+		curl -f -L -S -o "$curl_output" -s "$1"
 	fi
 }
 
@@ -385,7 +385,7 @@ configure() {
 	check_out_dir
 
 	pkg_name="AdGuardHome_${os}_${cpu}.${pkg_ext}"
-	url="https://static.adtidy.org/adguardhome/${channel}/${pkg_name}"
+	url="https://github.com/HuTuTuOnO/AdGuardHome/releases/latest/download/${pkg_name}"
 	agh_dir="${out_dir}/AdGuardHome"
 	readonly pkg_name url agh_dir
 
@@ -417,7 +417,7 @@ please, restart it with root privileges'
 #
 # TODO(e.burkov): Try to avoid restarting.
 rerun_with_root() {
-	script_url='https://raw.githubusercontent.com/AdguardTeam/AdGuardHome/master/scripts/install.sh'
+	script_url='https://raw.githubusercontent.com/HuTuTuOnO/AdGuardHome/master/scripts/install.sh'
 	readonly script_url
 
 	r='-R'
@@ -474,7 +474,7 @@ unpack() {
 
 	case "$pkg_ext" in
 	'zip')
-		unzip "$pkg_name" -d "$out_dir"
+		unzip -o "$pkg_name" -d "$out_dir"
 		;;
 	'tar.gz')
 		tar -C "$out_dir" -f "$pkg_name" -x -z
@@ -507,7 +507,7 @@ handle_existing() {
 	fi
 
 	existing_adguard_home="$(ls -1 -A "$agh_dir")"
-	if [ "$existing_adguard_home" != '' ]; then
+	if [ "$existing_adguard_home" != '' ] && [ -f "$agh_dir/AdGuardHome" ]; then
 		log 'the existing AdGuard Home installation is detected'
 
 		if [ "$reinstall" -ne '1' ] && [ "$uninstall" -ne '1' ]; then
@@ -522,8 +522,16 @@ handle_existing() {
 			log "cannot uninstall AdGuard Home from $agh_dir"
 		fi
 
-		rm -r "$agh_dir"
+		if [ "$uninstall" -eq '1' ]; then
+			rm -r "$agh_dir"
+			log 'AdGuard Home was successfully uninstalled'
+		else
+			log 'keeping existing configuration and data for reinstallation'
+		fi
+	fi
 
+	if [ "$uninstall" -eq '1' ] && [ -d "$agh_dir" ]; then
+		rm -r "$agh_dir"
 		log 'AdGuard Home was successfully uninstalled'
 	fi
 
@@ -544,9 +552,7 @@ install_service() {
 		return 0
 	fi
 
-	log "installation failed, removing $agh_dir"
-
-	rm -r "$agh_dir"
+	log "installation failed; preserving configuration and data in $agh_dir"
 
 	# Some devices detected to have armv7 CPU face the compatibility issues with
 	# actual armv7 builds.  We should try to install the armv5 binary instead.
@@ -567,7 +573,7 @@ install_service() {
 # Entrypoint
 
 # Set default values of configuration variables.
-channel='release'
+channel='smart-dns'
 reinstall='0'
 uninstall='0'
 verbose='0'
@@ -591,9 +597,13 @@ fi
 # Needs rights.
 fix_freebsd
 
+# Download before stopping an existing service.
+if [ "$uninstall" -ne '1' ]; then
+	download
+fi
+
 handle_existing
 
-download
 unpack
 
 install_service

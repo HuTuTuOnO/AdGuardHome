@@ -1,0 +1,118 @@
+name: Build and publish Smart DNS
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smart-dns-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: '1.27.1'
+  NODE_VERSION: '24'
+
+jobs:
+  frontend:
+    if: github.repository == 'HuTuTuOnO/AdGuardHome'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: client_v2/package-lock.json
+      - run: npm ci
+        working-directory: client_v2
+      - run: npm run check && npm run translations:check && npm run build-prod
+        working-directory: client_v2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smart-dns-frontend
+          path: build/
+          if-no-files-found: error
+
+  test:
+    if: github.repository == 'HuTuTuOnO/AdGuardHome'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: sh -n scripts/install.sh
+      - run: go test -race ./internal/filtering ./internal/dnsforward
+      - run: go vet ./internal/filtering ./internal/dnsforward
+
+  build:
+    needs: [frontend, test]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [linux, darwin, freebsd, openbsd, windows]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: smart-dns-frontend
+          path: build/
+      - name: Build and package binaries
+        env:
+          OS: ${{ matrix.os }}
+          DOWNLOAD_BASE_URL: https://github.com/HuTuTuOnO/AdGuardHome/releases/latest/download
+        run: |
+          make SHELL=bash FRONTEND_PREBUILT=1 SIGN=0 VERBOSE=1 VERSION="v0.0.0-smart-dns-${GITHUB_SHA:0:12}" build-release pack-release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smart-dns-${{ matrix.os }}
+          path: |
+            dist/AdGuardHome_${{ matrix.os }}_*.tar.gz
+            dist/AdGuardHome_${{ matrix.os }}_*.zip
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: smart-dns-*
+          merge-multiple: true
+          path: packages/
+      - name: Publish installable GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cd packages
+          sha256sum AdGuardHome_*.tar.gz AdGuardHome_*.zip > checksums.txt
+          tag="smart-dns-${GITHUB_SHA:0:12}"
+          cat > release-notes.md <<EOF
+          Smart DNS build from commit ${GITHUB_SHA}.
+
+          Includes the client_v2 interface and ip2region DNS rewrites with region ranking, priority and weighted address selection.
+
+          Place databases at /opt/AdGuardHome/data/ip2region_v4.xdb and /opt/AdGuardHome/data/ip2region_v6.xdb, then enable Smart DNS in DNS rewrites. The databases are not included in these archives.
+          EOF
+          gh release create "$tag" AdGuardHome_*.tar.gz AdGuardHome_*.zip checksums.txt \
+            --target "$GITHUB_SHA" --latest --title "Smart DNS ${GITHUB_SHA:0:12}" \
+            --notes-file release-notes.md
